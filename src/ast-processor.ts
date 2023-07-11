@@ -4,23 +4,19 @@ import { Ast } from './models/ast.model';
 export class ASTProcessor {
   private ast: Ast[] = [];
 
-  process(tree: any, namespace?: string): this {
+  process(tree: any): this {
     const childCount = tree.childCount;
     Array.from(Array(childCount).keys()).forEach((_, index) => {
       const child = tree.getChild(index);
-      let rule: string = <string>child?.parent?.constructor.name;
       if (!child) return;
       if (!(child instanceof TerminalNode)) {
-        namespace ? this.process(child, `${namespace}.${rule}`) : this.process(child, rule);
+        this.process(child);
         return;
       }
-
       const ruleIndex = tree.ruleIndex;
       const token = child.symbol;
       const tokenType = token.type;
-      namespace = namespace?.replace(/context/ig, '').toLocaleLowerCase();
-      rule = rule?.replace(/context/ig, '');
-      this.ast.push({ token: <string>token.text, tokenType, ruleIndex, rule, namespace });
+      this.ast.push({ token: <string>token.text, tokenType, ruleIndex});
 
     });
 
