@@ -108,11 +108,11 @@ export class SolidityParser {
     const contractName = ast.find(item => item.ruleIndex === CONTRACT_NAME.ruleIndex && item.tokenType === CONTRACT_NAME.tokenType)?.token;
 
     const beginDate = ast
-      .filter(item => BEGIN_DATE.find(_item => _item.ruleIndex === item.ruleIndex && _item.tokenType === item.tokenType))
+      .filter(item => BEGIN_DATE.find(_item => _item.ruleIndex === item.ruleIndex && _item.tokenType === item.tokenType) && item.rules?.includes(7))
       .map(item => item.token);
 
     const dueDate = ast
-      .filter(item => DUE_DATE.find(_item => _item.ruleIndex === item.ruleIndex && _item.tokenType === item.tokenType))
+      .filter(item => DUE_DATE.find(_item => _item.ruleIndex === item.ruleIndex && _item.tokenType === item.tokenType) && item.rules?.includes(8))
       .map(item => item.token);
 
     const application = ast.find(item => item.ruleIndex === APPLICATION.ruleIndex && item.tokenType === APPLICATION.tokenType)?.token?.replace(/\/|\"/g, '');
