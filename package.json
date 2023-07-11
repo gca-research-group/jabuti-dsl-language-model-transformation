@@ -14,7 +14,7 @@
     "model transformation"
   ],
   "scripts": {
-		"package": "esbuild index.ts --bundle --outfile=dist/main.js --platform=node"
+		"package": "esbuild index.ts --bundle --outfile=dist/main.js --platform=node --minify"
   },
   "devDependencies": {
     "@types/ejs": "^3.1.2",
