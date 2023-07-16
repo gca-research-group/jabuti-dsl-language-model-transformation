@@ -25,11 +25,11 @@ const BEGIN_DATE = [
   "ruleIndex": 36
 },
 {
-  "tokenType": 67,
+  "tokenType": 66,
   "ruleIndex": 41
 },
 {
-  "tokenType": 65,
+  "tokenType": 66,
   "ruleIndex": 40
 },
 {
@@ -41,11 +41,7 @@ const BEGIN_DATE = [
   "ruleIndex": 39
 },
 {
-  "tokenType": 55,
-  "ruleIndex": 37
-},
-{
-  "tokenType": 64,
+  "tokenType": 69,
   "ruleIndex": 38
 }];
 
@@ -66,11 +62,11 @@ const DUE_DATE = [{
   "ruleIndex": 36
 },
 {
-  "tokenType": 67,
+  "tokenType": 66,
   "ruleIndex": 41
 },
 {
-  "tokenType": 65,
+  "tokenType": 66,
   "ruleIndex": 40
 },
 {
@@ -78,12 +74,8 @@ const DUE_DATE = [{
   "ruleIndex": 37
 },
 {
-  "tokenType": 69,
+  "tokenType": 64,
   "ruleIndex": 39
-},
-{
-  "tokenType": 55,
-  "ruleIndex": 37
 },
 {
   "tokenType": 69,
