@@ -3,7 +3,7 @@
   "description": "A package for transforming Jabuti code into other languages",
   "author": "The Applied Computing Research Group <mailson.borges@sou.unijui.edu.br> (GCA)",
   "homepage": "https://github.com/gca-research-group/jabuti-dsl-language-model-transformation#readme",
-  "version": "0.0.8-alpha",
+  "version": "0.0.9-alpha",
   "main": "index.js",
   "license": "MIT",
   "keywords": [
