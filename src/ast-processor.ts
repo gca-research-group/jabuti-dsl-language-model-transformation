@@ -2,8 +2,8 @@ import { TerminalNode } from 'antlr4ts/tree/TerminalNode';
 import { type Ast } from './models/ast.model';
 
 import { CharStreams, CommonTokenStream, type RuleContext } from 'antlr4ts';
-import { JabutiGrammarLexer } from 'jabuti-dsl-language-antlr-v3/dist/JabutiGrammarLexer';
-import { JabutiGrammarParser } from 'jabuti-dsl-language-antlr-v3/dist/JabutiGrammarParser';
+import { JabutiGrammarLexer } from 'jabuti-dsl-language-antlr/dist/JabutiGrammarLexer';
+import { JabutiGrammarParser } from 'jabuti-dsl-language-antlr/dist/JabutiGrammarParser';
 
 const CONTRACT_NAME = { ruleIndex: 3, tokenType: 71 };
 const APPLICATION = { ruleIndex: 9, tokenType: 63 };
@@ -200,6 +200,10 @@ const TIMEOUT = {
     {
       tokenType: 70,
       ruleIndex: 21
+    },
+    {
+      tokenType: 66,
+      ruleIndex: 44
     }
   ]
 };
@@ -217,6 +221,14 @@ const MAXNUMBEROFOPERATION = {
     {
       tokenType: 46,
       ruleIndex: 25
+    },
+    {
+      tokenType: 66,
+      ruleIndex: 44
+    },
+    {
+      tokenType: 70,
+      ruleIndex: 44
     }
   ]
 };
@@ -224,6 +236,10 @@ const MAXNUMBEROFOPERATION = {
 const MESSAGE_CONTENT = {
   token: {
     tokenType: 23,
+    ruleIndex: 26
+  },
+  closeToken: {
+    tokenType: 52,
     ruleIndex: 26
   },
   children: [
@@ -236,12 +252,28 @@ const MESSAGE_CONTENT = {
       ruleIndex: 29
     },
     {
-      tokenType: 58,
-      tokenIndex: 108
+      tokenType: 61,
+      ruleIndex: 28
     },
     {
-      tokenType: 58,
-      tokenIndex: 109
+      tokenType: 66,
+      ruleIndex: 44
+    },
+    {
+      tokenType: 70,
+      ruleIndex: 44
+    },
+    {
+      tokenType: 61,
+      ruleIndex: 27
+    },
+    {
+      tokenType: 70,
+      ruleIndex: 44
+    },
+    {
+      tokenType: 71,
+      ruleIndex: 3
     }
   ]
 };
@@ -359,10 +391,15 @@ export class ASTProcessor {
             .join('')
         };
 
-        const variables: Array<{ name: string; type: string }> = [];
+        const variables: Array<{ name: string; type: string }> = terms
+          .filter(term => term.type === 'messageContent')
+          .map(term => {
+            return { type: (term.arguments as any).type, name: term.name.camel };
+          })
+          .flat();
 
         if (weekdayInterval.length) {
-          variables.push({ name: 'weekDay', type: 'INTEGER' });
+          variables.push({ name: 'weekDay', type: 'NUMBER' });
         }
 
         if (timeInterval.length) {
@@ -435,7 +472,10 @@ export class ASTProcessor {
 
   private buildWeekDaysInterval(tokens: Ast[]) {
     return tokens
-      .filter(a => a.ruleIndex === WEEKDAY_INTERVAL.token.ruleIndex && a.tokenType === WEEKDAY_INTERVAL.token.tokenType)
+      .filter(
+        token =>
+          token.ruleIndex === WEEKDAY_INTERVAL.token.ruleIndex && token.tokenType === WEEKDAY_INTERVAL.token.tokenType
+      )
       .map((item, index) => {
         const closeToken = tokens.find(
           token =>
@@ -563,14 +603,49 @@ export class ASTProcessor {
           token.ruleIndex === MESSAGE_CONTENT.token.ruleIndex && token.tokenType === MESSAGE_CONTENT.token.tokenType
       )
       .map((item, index) => {
+        const closeToken = tokens.find(
+          token =>
+            token.tokenIndex > item.tokenIndex &&
+            token.ruleIndex === MESSAGE_CONTENT.closeToken.ruleIndex &&
+            token.tokenType === MESSAGE_CONTENT.closeToken.tokenType
+        );
+
         const values = tokens
           .filter(
             token =>
               !!MESSAGE_CONTENT.children.find(
                 child => child.ruleIndex === token.ruleIndex && child.tokenType === token.tokenType
-              )
+              ) &&
+              token.rules?.includes(item.ruleIndex) &&
+              token.tokenIndex > item.tokenIndex &&
+              closeToken &&
+              token.tokenIndex < closeToken.tokenIndex
           )
           .map(token => token.token);
+
+        const args: { operator: string; value: string | boolean; type: string } = {
+          operator: '',
+          value: '',
+          type: ''
+        };
+
+        if (values.length === 1) {
+          args.operator = '==';
+          args.value = true;
+          args.type = 'BOOLEAN';
+        }
+
+        if (values.length === 3) {
+          args.operator = values[1];
+          args.value = values[2];
+          args.type = isNaN(+values[2]) ? 'NUMBER' : 'TEXT';
+        }
+
+        if (values.length === 4) {
+          args.operator = `${values[1]}${values[2]}`;
+          args.value = values[3];
+          args.type = isNaN(+values[3]) ? 'NUMBER' : 'TEXT';
+        }
 
         return {
           name: {
@@ -579,10 +654,7 @@ export class ASTProcessor {
             pascal: `messageContent${index}`
           },
           type: 'messageContent',
-          arguments: {
-            isBoolean: values.length === 4 && ['==', '>=', '<='].includes(`${values[1]}${values[2]}`),
-            values
-          }
+          arguments: args
         };
       });
   }

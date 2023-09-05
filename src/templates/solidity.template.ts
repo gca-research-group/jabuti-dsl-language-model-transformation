@@ -63,6 +63,18 @@ struct <%= clause.name.pascal %> {
       Timeout <%= term.name.camel %>;
     <% } %>
 
+    <% if (term.type === 'messageContent') { %>
+
+      <% if (term.arguments.type === 'BOOLEAN') { %>
+        bool <%= term.name.camel %>;
+      <% } else if (term.arguments.type === 'NUMBER') { %>
+        uint32 <%= term.name.camel %>;
+      <% } else if (term.arguments.type === 'TEXT') { %>
+        string <%= term.name.camel %>;
+      <% } %>
+      
+    <% } %>
+
   <% }) %>
 }
 <% }) %>
@@ -118,54 +130,63 @@ contract <%= contractName %> {
     }
 
     <% clauses.forEach(clause => { %>
-    function clause<%= clause.name.pascal %> (<%= clause.variables.map(variable => \`uint32 _\${variable.name}\`).join(', ') %>) public onlyProcess returns (bool) {
-      bool isValid = false;
+    function clause<%= clause.name.pascal %> ( 
+      <% clause.variables.map((variable, index) =>  { %>
+        <% if (variable.type === 'BOOLEAN') {%>
+          <%= \`bool _\${variable.name} \${index !== (clause.variables.length - 1) ? ',' : ''} \` %>
+        <% } else { %>
+          <%= \`\${['NUMERIC', 'DATE', 'DATETIME'].includes(variable.type) ? 'uint32' : 'string memory'} _\${variable.name} \${index !== (clause.variables.length - 1) ? ',' : ''} \` %>
+        <% } %>
+      <% }) %> 
+    )
+     public onlyProcess returns (bool) {
+      bool isValid = true;
 
-      <% clause.terms.forEach(term => { %>
+      <% clause.terms.forEach((term, index) => { %>
         <% if (term.type === 'weekdayInterval') { %>
-          // Verifies if weekday is in WeekDaysInterval definition
           isValid = isValid && _weekDay >= <%= clause.name.camel %>.<%= term.name.camel %>.start && _weekDay <= <%= clause.name.camel %>.<%= term.name.camel %>.end;
         <% } %>
 
         <% if (term.type === 'timeInterval') { %>
-          // Verifies if access time is in TimeInterval definition
           isValid = isValid && _accessTime >= <%= clause.name.camel %>.<%= term.name.camel %>.start && _accessTime <= <%= clause.name.camel %>.<%= term.name.camel %>.end;
         <% } %>
 
         <% if (term.type === 'timeout') { %>
-          // Verifies if access datetime is in Timeout definition
           isValid = isValid && _accessDateTime <= <%= clause.name.camel %>.<%= term.name.camel %>.end;
         <% } %>
 
+        <% if (term.type === 'messageContent' && term.arguments.type === 'TEXT') { %>
+          isValid = isValid && keccak256(abi.encodePacked(<%= clause.name.camel %>.<%= term.name.camel %>)) <%- term.arguments.operator %> keccak256(abi.encodePacked(_<%= term.name.camel %>));
+        <% } %>
+
+        <% if (term.type === 'messageContent' && term.arguments.type !== 'TEXT') { %>
+          isValid = isValid && <%= clause.name.camel %>.<%= term.name.camel %> <%- term.arguments.operator %> _<%= term.name.camel %>;
+        <% } %>
+
         <% if (term.type === 'maxNumberOfOperation') { %>
-          // Verifies if MaxNumberOfOperation period is initialized
-          bool maxNumberOfOperationIsInitialized = <%= clause.name.camel %>.<%= term.name.camel %>.start == 0 && <%= clause.name.camel %>.<%= term.name.camel %>.end == 0;
+          bool maxNumberOfOperationIsInitialized<%= index %> = <%= clause.name.camel %>.<%= term.name.camel %>.start == 0 && <%= clause.name.camel %>.<%= term.name.camel %>.end == 0;
 
-          // Verifies if end period is less than access datetime
-          bool endPeriodIsLassThanAccessDateTime = <%= clause.name.camel %>.<%= term.name.camel %>.end < _accessDateTime;
+          bool endPeriodIsLassThanAccessDateTime<%= index %> = <%= clause.name.camel %>.<%= term.name.camel %>.end < _accessDateTime;
 
-          // Resets MaxNumberOfOperation values
-          if (!maxNumberOfOperationIsInitialized || endPeriodIsLassThanAccessDateTime) {
+          if (!maxNumberOfOperationIsInitialized<%= index %> || endPeriodIsLassThanAccessDateTime<%= index %>) {
             <%= clause.name.camel %>.<%= term.name.camel %>.start  = _accessDateTime;
             <%= clause.name.camel %>.<%= term.name.camel %>.end    = _accessDateTime + timeInSeconds[<%= clause.name.camel %>.<%= term.name.camel %>.timeUnit];
             <%= clause.name.camel %>.<%= term.name.camel %>.used   = 0;
           }
 
-          <% if (clause.operation === 'request') { %>
-            <% timeoutTerms.forEach(timeout => { %>
-              <%= timeout.clauseName.camel %>.<%= timeout.termName.camel %>.end  = _accessDateTime + <%= timeout.clauseName.camel %>.<%= timeout.termName.camel %>.increase;
-            <% }) %>
-          <% } %>
-
-          // Verifies if is in MaxNumberOfOperation
           isValid = isValid && <%= clause.name.camel %>.<%= term.name.camel %>.used <= <%= clause.name.camel %>.<%= term.name.camel %>.max;
 
         <% } %>
 
       <% }) %>
 
-      // Verifies if any term of the clause is broken
-      require(!isValid, "<%= clause.errorMessage %>");
+      <% if (clause.operation === 'request') { %>
+        <% timeoutTerms.forEach(timeout => { %>
+          <%= timeout.clauseName.camel %>.<%= timeout.termName.camel %>.end  = _accessDateTime + <%= timeout.clauseName.camel %>.<%= timeout.termName.camel %>.increase;
+        <% }) %>
+      <% } %>
+
+      require(!isValid, <%- clause.errorMessage %>);
 
       emit SuccessEvent("Successful execution!");
       return isValid;
