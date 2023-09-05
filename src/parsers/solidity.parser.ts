@@ -8,6 +8,7 @@ export class SolidityParser extends GenericParser implements Parser {
     const content = super.parse(contract, SOLIDITY_TEMPLATE);
     return prettier.format(content.toString(), {
       parser: 'solidity-parse',
+      plugins: ['prettier-plugin-solidity'],
       printWidth: 120,
       tabWidth: 4,
       useTabs: false,
