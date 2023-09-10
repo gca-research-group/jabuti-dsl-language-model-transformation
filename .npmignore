@@ -1,4 +1,9 @@
 /node_modules
+/dist
+.vscode
 sample.jabuti
 sample.sol
 sample.ts
+build.js
+ast.json
+ast2.json
