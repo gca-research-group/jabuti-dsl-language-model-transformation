@@ -274,6 +274,14 @@ const MESSAGE_CONTENT = {
     {
       tokenType: 71,
       ruleIndex: 3
+    },
+    {
+      tokenType: 61,
+      ruleIndex: 32
+    },
+    {
+      tokenType: 58,
+      ruleIndex: 32
     }
   ]
 };
@@ -651,7 +659,7 @@ export class ASTProcessor {
           name: {
             snake: `messageContent_${index}`,
             camel: `messageContent${index}`,
-            pascal: `messageContent${index}`
+            pascal: `MessageContent${index}`
           },
           type: 'messageContent',
           arguments: args
