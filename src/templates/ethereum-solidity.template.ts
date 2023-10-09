@@ -1,7 +1,6 @@
 export const SOLIDITY_TEMPLATE = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-// weekdays
 uint8 constant SUNDAY=0;
 uint8 constant MONDAY=1;
 uint8 constant TUESDAY=2;
@@ -10,7 +9,6 @@ uint8 constant THURSDAY=4;
 uint8 constant FRIDAY=5;
 uint8 constant SATURDAY=6;
 
-// time
 uint8 constant SECOND = 0;
 uint8 constant MINUTE = 1;
 uint8 constant HOUR= 2;
@@ -22,7 +20,7 @@ uint8 constant YEAR= 6;
 struct Party {
     string name;
     address walletAddress;
-    bool aware; // default value false
+    bool aware;
 }
 
 struct Parties {
@@ -42,7 +40,7 @@ struct Timeout {
 
 struct MaxNumberOfOperation {
     uint32 max;
-    uint32 used; // default value 0
+    uint32 used;
     uint32 start;
     uint32 end;
     uint8 timeUnit;
@@ -106,10 +104,10 @@ contract <%= contractName %> {
     constructor(Parties memory _parties, <%= clauses.map(clause => \`\${clause.name.pascal} memory _\${clause.name.camel}\`).join(', ') %>) {
         parties = _parties;
 
-        <%= clauses.map(clause => \`\${clause.name.camel} = _\${clause.name.camel};\`).join('') %>
-
         parties.application.aware = false;
         parties.proccess.aware = false;
+
+        <%= clauses.map(clause => \`\${clause.name.camel} = _\${clause.name.camel};\`).join('') %>
 
         <% clauses.forEach(clause => { %>
           <% clause.terms.forEach(term => { %>
@@ -186,7 +184,11 @@ contract <%= contractName %> {
         <% }) %>
       <% } %>
 
-      require(!isValid, <%- clause.errorMessage %>);
+      <% if (clause.errorMessage) { %>
+        require(!isValid, <%- clause.errorMessage %>);
+      <% } else { %>
+        require(!isValid, "Error executing clause: <%- clause.name.pascal %>");
+      <% } %>
 
       emit SuccessEvent("Successful execution!");
       return isValid;
