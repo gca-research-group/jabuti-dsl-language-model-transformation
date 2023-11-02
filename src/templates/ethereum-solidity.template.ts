@@ -133,7 +133,7 @@ contract <%= contractName %> {
         <% if (variable.type === 'BOOLEAN') {%>
           <%= \`bool _\${variable.name} \${index !== (clause.variables.length - 1) ? ',' : ''} \` %>
         <% } else { %>
-          <%= \`\${['NUMERIC', 'DATE', 'DATETIME'].includes(variable.type) ? 'uint32' : 'string memory'} _\${variable.name} \${index !== (clause.variables.length - 1) ? ',' : ''} \` %>
+          <%= \`\${['NUMBER', 'DATE', 'DATETIME', 'TIME'].includes(variable.type) ? 'uint32' : 'string memory'} _\${variable.name} \${index !== (clause.variables.length - 1) ? ',' : ''} \` %>
         <% } %>
       <% }) %> 
     )

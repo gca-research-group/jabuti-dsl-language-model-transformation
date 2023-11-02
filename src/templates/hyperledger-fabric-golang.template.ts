@@ -215,7 +215,7 @@ func (s *SmartContract) Query(ctx contractapi.TransactionContextInterface, contr
       <% if (variable.type === 'BOOLEAN') {%>
         <%= \`\${variable.name} bool, \` %>
       <% } else { %>
-        <%= \`\${variable.name} \${['NUMERIC', 'DATE', 'DATETIME'].includes(variable.type) ? 'int' : 'string'},\` %>
+        <%= \`\${variable.name} \${['NUMBER', 'DATE', 'DATETIME', 'TIME'].includes(variable.type) ? 'int' : 'string'},\` %>
       <% } %>
     <% }) %> 
   ) (bool, error) {
