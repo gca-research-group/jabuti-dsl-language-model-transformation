@@ -1,4 +1,4 @@
-export const ETHEREUM_GOLANG_TEMPLATE = `
+export const HYPERLEDGER_FABRIC_GOLANG_TEMPLATE = `
 package main
 
 import (
@@ -151,7 +151,7 @@ func (s *SmartContract) isBetweenBeginDateAndDueDate(asset *Asset) error {
 	return nil
 }
 
-func (s *SmartContract) applicationIdIsRequired(id string) error {
+func (s *SmartContract) isApplicationIdValid(id string) error {
 	if id == "" {
 		return fmt.Errorf("application id is required")
 	}
@@ -159,7 +159,7 @@ func (s *SmartContract) applicationIdIsRequired(id string) error {
 	return nil
 }
 
-func (s *SmartContract) processIdIsRequired(id string) error {
+func (s *SmartContract) isProcessIdValid(id string) error {
 	if id == "" {
 		return fmt.Errorf("process id is required")
 	}
@@ -167,7 +167,7 @@ func (s *SmartContract) processIdIsRequired(id string) error {
 	return nil
 }
 
-func (s *SmartContract) beginDateIsRequired(beginDate time.Time) error {
+func (s *SmartContract) isBeginDateValid(beginDate time.Time) error {
 	if beginDate.IsZero() {
 		return fmt.Errorf("begin date is required")
 	}
@@ -175,7 +175,7 @@ func (s *SmartContract) beginDateIsRequired(beginDate time.Time) error {
 	return nil
 }
 
-func (s *SmartContract) dueDateIsRequired(dueDate time.Time) error {
+func (s *SmartContract) isDueDateValid(dueDate time.Time) error {
 	if dueDate.IsZero() {
 		return fmt.Errorf("due date is required")
 	}
@@ -183,7 +183,7 @@ func (s *SmartContract) dueDateIsRequired(dueDate time.Time) error {
 	return nil
 }
 
-func (s *SmartContract) beginDateGreaterThanDueDate(beginDate time.Time, dueDate time.Time) error {
+func (s *SmartContract) isDueDateGreaterThanBeginDate(beginDate time.Time, dueDate time.Time) error {
 	if beginDate.After(dueDate) {
 		return fmt.Errorf("begin date greater than due date")
 	}
@@ -226,23 +226,23 @@ func (s *SmartContract) Init(ctx contractapi.TransactionContextInterface, assetR
 		return "", err
 	}
 
-	if err := s.applicationIdIsRequired(assetRequest.Parties.Process.Id); err != nil {
+  if err := s.isBeginDateValid(beginDate); err != nil {
 		return "", err
 	}
 
-	if err := s.processIdIsRequired(assetRequest.Parties.Process.Id); err != nil {
+	if err := s.isDueDateValid(dueDate); err != nil {
 		return "", err
 	}
 
-	if err := s.beginDateIsRequired(beginDate); err != nil {
+	if err := s.isDueDateGreaterThanBeginDate(beginDate, dueDate); err != nil {
 		return "", err
 	}
 
-	if err := s.dueDateIsRequired(dueDate); err != nil {
+	if err := s.isApplicationIdValid(assetRequest.Parties.Process.Id); err != nil {
 		return "", err
 	}
 
-	if err := s.beginDateGreaterThanDueDate(beginDate, dueDate); err != nil {
+	if err := s.isProcessIdValid(assetRequest.Parties.Process.Id); err != nil {
 		return "", err
 	}
 

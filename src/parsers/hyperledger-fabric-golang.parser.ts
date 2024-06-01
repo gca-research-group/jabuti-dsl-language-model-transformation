@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { ETHEREUM_GOLANG_TEMPLATE } from '../templates/hyperledger-fabric-golang.template';
+import { HYPERLEDGER_FABRIC_GOLANG_TEMPLATE } from '../templates/hyperledger-fabric-golang.template';
 import { GenericParser } from './generic.parser';
 
 const GO_MOD_FILE = `
@@ -15,7 +15,7 @@ require github.com/hyperledger/fabric-chaincode-go v0.0.0-20230731094759-d626e9a
 
 `;
 
-export class EthereumGolangParser extends GenericParser {
+export class HyperledgerFabricGolangParser extends GenericParser {
   protected formatContent(content: string) {
     try {
       const code = execSync('gofmt', {
@@ -30,7 +30,7 @@ export class EthereumGolangParser extends GenericParser {
   }
 
   parse(contract: string) {
-    const content = super.parse(contract, ETHEREUM_GOLANG_TEMPLATE);
+    const content = super.parse(contract, HYPERLEDGER_FABRIC_GOLANG_TEMPLATE);
     return [this.formatContent(content as string), GO_MOD_FILE];
   }
 }

@@ -5,7 +5,7 @@ import * as path from 'path';
 
 import * as prettier from 'prettier';
 
-export class SolidityParser extends GenericParser {
+export class EthereumSolidityParser extends GenericParser {
   protected async formatContent(content: string) {
     try {
       const modulePath = require.resolve('prettier-plugin-solidity');
