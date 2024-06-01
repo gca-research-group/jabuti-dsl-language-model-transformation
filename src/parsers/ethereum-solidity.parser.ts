@@ -7,15 +7,20 @@ import * as prettier from 'prettier';
 
 export class SolidityParser extends GenericParser {
   protected async formatContent(content: string) {
-    const modulePath = require.resolve('prettier-plugin-solidity');
-    const pluginPath = path.dirname(modulePath);
+    try {
+      const modulePath = require.resolve('prettier-plugin-solidity');
+      const pluginPath = path.dirname(modulePath);
 
-    const options = {
-      parser: 'solidity-parse',
-      plugins: [pluginPath]
-    };
+      const options = {
+        parser: 'solidity-parse',
+        plugins: [pluginPath]
+      };
 
-    return await prettier.format(content, options);
+      return await prettier.format(content, options);
+    } catch (error) {
+      return content;
+    }
+    
   }
 
   async parse(contract: string) {

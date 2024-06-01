@@ -18,10 +18,12 @@ require github.com/hyperledger/fabric-chaincode-go v0.0.0-20230731094759-d626e9a
 export class EthereumGolangParser extends GenericParser {
   protected formatContent(content: string) {
     try {
-      return execSync('gofmt', {
+      const code = execSync('gofmt', {
         input: content,
         encoding: 'utf8'
       });
+
+      return code.replace(/,\n\n/g, ',');
     } catch (error) {
       return content;
     }

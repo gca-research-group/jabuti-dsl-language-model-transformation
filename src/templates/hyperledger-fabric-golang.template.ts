@@ -4,6 +4,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+  "log"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
@@ -24,14 +26,15 @@ type SmartContract struct {
 }
 
 type Party struct {
-	Name  string  \`json:"name"\`
-	MSPID string  \`json:"mspid"\`
-	Aware bool    \`json:"aware"\`
+	Id            string
+	Name          string
+	IsSigned      bool
+	SignatureDate time.Time
 }
 
 type Parties struct {
-	Application Party \`json:"application"\`
-	Process     Party \`json:"process"\`
+	Application Party
+	Process     Party
 }
 
 type Interval struct {
@@ -84,134 +87,288 @@ type MaxNumberOfOperation struct {
 <% }) %>
 
 type Asset struct {
-	Parties     Parties \`json:"parties"\`
-	IsActivated bool    \`json:"isActivated"\`
+	Parties   Parties
+	BeginDate time.Time
+	DueDate   time.Time
+	IsSigned  bool
+
   <% clauses.forEach(clause => { %>
-    <%= clause.name.pascal %> <%= clause.name.pascal %> \`json:"<%= clause.name.camel %>"\`
+    <%= clause.name.pascal %> <%= clause.name.pascal %> 
   <% }) %>
 }
 
-func (s *SmartContract) IsParty(MSPID string, asset *Asset) (bool) {
-  return MSPID == asset.Parties.Process.MSPID || MSPID == asset.Parties.Application.MSPID
+type PartyRequest struct {
+	Name string \`json:"name"\`
+	Id   string \`json:"id"\`
 }
 
-func (s *SmartContract) Init(ctx contractapi.TransactionContextInterface, parties Parties) (string, error) {
-
-	if parties.Application.MSPID == "" {
-		return "", fmt.Errorf("the MSPID from Application is required")
-	}
-
-	if parties.Process.MSPID == "" {
-		return "", fmt.Errorf("the MSPID from process is required")
-	}
-
-	parties.Application.Aware = false
-	parties.Process.Aware = false
-
-	contractId := uuid.New()
-
-	contract := Asset{}
-  contract.Parties = parties
-  <% clauses.forEach(clause => { %>
-    <% clause.terms.forEach(term => { %>
-      <% if (term.type === 'maxNumberOfOperation') { %>
-        contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used = 0
-        contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start = 0
-        contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.End = 0
-      <% } %>
-    <% }) %>
-  <% }) %>
-
-	contractAsBytes, err := json.Marshal(contract)
-
-	if err != nil {
-		return "", fmt.Errorf("marshal error: %s", err.Error())
-	}
-
-	ctx.GetStub().PutState(contractId.String(), contractAsBytes)
-
-	return contractId.String(), nil
+type PartiesRequest struct {
+	Application PartyRequest \`json:"application"\`
+	Process     PartyRequest \`json:"process"\`
 }
 
-func (s *SmartContract) Sign(ctx contractapi.TransactionContextInterface, contractId string) error {
+type AssetRequest struct {
+	BeginDate string         \`json:"beginDate"\`
+	DueDate   string         \`json:"dueDate"\`
+	Parties   PartiesRequest \`json:"parties"\`
+}
 
-	contractAsBytes, err := ctx.GetStub().GetState(contractId)
+func (s *SmartContract) isParty(id string, asset *Asset) (bool, error) {
+	value := id == asset.Parties.Process.Id || id == asset.Parties.Application.Id
+
+	if !value {
+		return value, fmt.Errorf("only the process or the application can execute this operation")
+	}
+
+	return value, nil
+}
+
+func (s *SmartContract) isSigned(party Party) (bool, error) {
+	if party.IsSigned {
+		return party.IsSigned, fmt.Errorf("the asset is already signed")
+	}
+
+	return party.IsSigned, nil
+}
+
+func (s *SmartContract) assetIsSigned(asset *Asset) error {
+	if asset.IsSigned {
+		return nil
+	}
+
+	return fmt.Errorf("asset is not signed")
+}
+
+func (s *SmartContract) isBetweenBeginDateAndDueDate(asset *Asset) error {
+	if asset.DueDate.Before(time.Now()) {
+		return fmt.Errorf("asset expired. The current date is after the due date")
+	}
+
+	if asset.BeginDate.After(time.Now()) {
+		return fmt.Errorf("the current date is before the start date")
+	}
+
+	return nil
+}
+
+func (s *SmartContract) applicationIdIsRequired(id string) error {
+	if id == "" {
+		return fmt.Errorf("application id is required")
+	}
+
+	return nil
+}
+
+func (s *SmartContract) processIdIsRequired(id string) error {
+	if id == "" {
+		return fmt.Errorf("process id is required")
+	}
+
+	return nil
+}
+
+func (s *SmartContract) beginDateIsRequired(beginDate time.Time) error {
+	if beginDate.IsZero() {
+		return fmt.Errorf("begin date is required")
+	}
+
+	return nil
+}
+
+func (s *SmartContract) dueDateIsRequired(dueDate time.Time) error {
+	if dueDate.IsZero() {
+		return fmt.Errorf("due date is required")
+	}
+
+	return nil
+}
+
+func (s *SmartContract) beginDateGreaterThanDueDate(beginDate time.Time, dueDate time.Time) error {
+	if beginDate.After(dueDate) {
+		return fmt.Errorf("begin date greater than due date")
+	}
+
+	return nil
+}
+
+func (s *SmartContract) string2Time(date string) (time.Time, error) {
+	parsed, err := time.Parse(time.RFC3339, date)
 
 	if err != nil {
-		return fmt.Errorf("failed to read from state: %s", err.Error())
+		return time.Time{}, fmt.Errorf("invalid date. Expected format 2006-01-02T15:04:05Z07:00. Recieved: %s", err.Error())
 	}
 
-	if contractAsBytes == nil {
-		return fmt.Errorf("contract %s does not exist", contractId)
-	}
+	return parsed, nil
+}
 
-	contract := new(Asset)
-
-  MSPID, err := cid.GetMSPID(ctx.GetStub())
-
-  if err != nil {
-		return fmt.Errorf("fail to get MSPID")
-	}
-
-	err = json.Unmarshal(contractAsBytes, contract)
+func (s *SmartContract) putState(ctx contractapi.TransactionContextInterface, assetId string, asset *Asset) error {
+	contractAsBytes, err := json.Marshal(asset)
 
 	if err != nil {
 		return fmt.Errorf("marshal error: %s", err.Error())
 	}
 
-  if !s.IsParty(MSPID, contract) {
-    return fmt.Errorf("only the process or the application can execute this operation")
-  }
-
-	if contract.Parties.Application.MSPID == MSPID {
-
-		if contract.Parties.Application.Aware {
-			return fmt.Errorf("the contract is already signed")
-		}
-
-		contract.Parties.Application.Aware = true
-	}
-
-	if contract.Parties.Process.MSPID == MSPID {
-
-		if contract.Parties.Process.Aware {
-			return fmt.Errorf("the contract is already signed")
-		}
-
-		contract.Parties.Process.Aware = true
-	}
-
-	contract.IsActivated = contract.Parties.Application.Aware && contract.Parties.Process.Aware
+	ctx.GetStub().PutState(assetId, contractAsBytes)
 
 	return nil
 }
 
-func (s *SmartContract) Query(ctx contractapi.TransactionContextInterface, contractId string) (*Asset, error) {
+func (s *SmartContract) Init(ctx contractapi.TransactionContextInterface, assetRequest AssetRequest) (string, error) {
+	var beginDate time.Time
+	var dueDate time.Time
+	var err error
 
-	contractAsBytes, err := ctx.GetStub().GetState(contractId)
+	if beginDate, err = s.string2Time(assetRequest.BeginDate); err != nil {
+		return "", err
+	}
+
+	if dueDate, err = s.string2Time(assetRequest.DueDate); err != nil {
+		return "", err
+	}
+
+	if err := s.applicationIdIsRequired(assetRequest.Parties.Process.Id); err != nil {
+		return "", err
+	}
+
+	if err := s.processIdIsRequired(assetRequest.Parties.Process.Id); err != nil {
+		return "", err
+	}
+
+	if err := s.beginDateIsRequired(beginDate); err != nil {
+		return "", err
+	}
+
+	if err := s.dueDateIsRequired(dueDate); err != nil {
+		return "", err
+	}
+
+	if err := s.beginDateGreaterThanDueDate(beginDate, dueDate); err != nil {
+		return "", err
+	}
+
+	asset := Asset{}
+	parties := Parties{}
+
+	asset.BeginDate = beginDate
+	asset.DueDate = dueDate
+
+	parties.Application.Id = assetRequest.Parties.Application.Id
+	parties.Application.Name = assetRequest.Parties.Application.Name
+	parties.Application.IsSigned = false
+
+	parties.Process.Id = assetRequest.Parties.Process.Id
+	parties.Process.Name = assetRequest.Parties.Process.Name
+	parties.Process.IsSigned = false
+
+	asset.Parties = parties
+
+  <% clauses.forEach(clause => { %>
+    <% clause.terms.forEach(term => { %>
+      <% if (term.type === 'maxNumberOfOperation') { %>
+        asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used = 0
+        asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start = 0
+        asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End = 0
+      <% } %>
+    <% }) %>
+  <% }) %>
+
+	assetId := uuid.New().String()
+
+	s.putState(ctx, assetId, &asset)
+
+	return assetId, nil
+}
+
+func (s *SmartContract) Sign(ctx contractapi.TransactionContextInterface, assetId string) error {
+
+	var id string
+	var err error
+	var asset *Asset
+
+	if id, err = s.QueryClientId(ctx); err != nil {
+		return err
+	}
+
+	if asset, err = s.QueryAsset(ctx, assetId); err != nil {
+		return err
+	}
+
+	if _, err := s.isParty(id, asset); err != nil {
+		return err
+	}
+
+	if err := s.isBetweenBeginDateAndDueDate(asset); err != nil {
+		return err
+	}
+
+	if asset.Parties.Application.Id == id {
+
+		if _, err := s.isSigned(asset.Parties.Application); err != nil {
+			return err
+		}
+
+		asset.Parties.Application.IsSigned = true
+		asset.Parties.Application.SignatureDate = time.Now()
+	}
+
+	if asset.Parties.Process.Id == id {
+
+		if _, err := s.isSigned(asset.Parties.Process); err != nil {
+			return err
+		}
+
+		asset.Parties.Process.IsSigned = true
+		asset.Parties.Process.SignatureDate = time.Now()
+	}
+
+	asset.IsSigned = asset.Parties.Application.IsSigned && asset.Parties.Process.IsSigned
+
+	s.putState(ctx, assetId, asset)
+
+	return nil
+}
+
+func (s *SmartContract) QueryAsset(ctx contractapi.TransactionContextInterface, assetId string) (*Asset, error) {
+
+	contractAsBytes, err := ctx.GetStub().GetState(assetId)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to read from state: %s", err.Error())
 	}
 
 	if contractAsBytes == nil {
-		return nil, fmt.Errorf("contract %s does not exist", contractId)
+		return nil, fmt.Errorf("asset %s does not exist", assetId)
 	}
 
-	contract := new(Asset)
+	asset := new(Asset)
 
-	err = json.Unmarshal(contractAsBytes, contract)
+	err = json.Unmarshal(contractAsBytes, asset)
 
 	if err != nil {
 		return nil, fmt.Errorf("marshal error: %s", err.Error())
 	}
 
-  return contract, nil
+	return asset, nil
+}
+
+func (s *SmartContract) QueryClientId(ctx contractapi.TransactionContextInterface) (string, error) {
+	clientIdentity := ctx.GetClientIdentity()
+
+	if clientIdentity == nil {
+		return "", fmt.Errorf("failed to get client identity")
+	}
+
+	clientID, err := clientIdentity.GetID()
+
+	if err != nil {
+		return "", fmt.Errorf("failed to get client ID: %v", err)
+	}
+
+	return clientID, nil
 }
 
 <% clauses.forEach(clause => { %>
-  func (s *SmartContract) Clause<%= clause.name.pascal %> ( ctx contractapi.TransactionContextInterface, contractId string,
-    <% clause.variables.map((variable, index) =>  { %>
+  func (s *SmartContract) Clause<%= clause.name.pascal %> ( ctx contractapi.TransactionContextInterface, assetId string, <% clause.variables.map((variable, index) =>  { %>
       <% if (variable.type === 'BOOLEAN') {%>
         <%= \`\${variable.name} bool, \` %>
       <% } else { %>
@@ -220,9 +377,18 @@ func (s *SmartContract) Query(ctx contractapi.TransactionContextInterface, contr
     <% }) %> 
   ) (bool, error) {
 
-    contract, err := s.Query(ctx, contractId)
+    var err error
+    var asset *Asset
 
-    if err != nil {
+    if asset, err = s.QueryAsset(ctx, assetId); err != nil {
+      return false, err
+    }
+
+    if err = s.isBetweenBeginDateAndDueDate(asset); err != nil {
+      return false, err
+    }
+
+    if err = s.assetIsSigned(asset); err != nil {
       return false, err
     }
 
@@ -230,37 +396,37 @@ func (s *SmartContract) Query(ctx contractapi.TransactionContextInterface, contr
 
     <% clause.terms.forEach((term, index) => { %>
       <% if (term.type === 'weekdayInterval') { %>
-        isValid = isValid && weekDay >= contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start && weekDay <= contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
+        isValid = isValid && weekDay >= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start && weekDay <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
       <% } %>
 
       <% if (term.type === 'timeInterval') { %>
-        isValid = isValid && accessTime >= contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start && accessTime <= contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
+        isValid = isValid && accessTime >= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start && accessTime <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
       <% } %>
 
       <% if (term.type === 'timeout') { %>
-        isValid = isValid && accessDateTime <= contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
+        isValid = isValid && accessDateTime <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
       <% } %>
 
       <% if (term.type === 'messageContent' && term.arguments.type === 'TEXT') { %>
-        isValid = isValid && contract.<%= clause.name.pascal %>.<%= term.name.pascal %> <%- term.arguments.operator %> <%= term.name.camel %>;
+        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %> <%- term.arguments.operator %> <%= term.name.camel %>;
       <% } %>
 
       <% if (term.type === 'messageContent' && term.arguments.type !== 'TEXT') { %>
-        isValid = isValid && contract.<%= clause.name.pascal %>.<%= term.name.pascal %> <%- term.arguments.operator %> <%= term.name.camel %>;
+        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %> <%- term.arguments.operator %> <%= term.name.camel %>;
       <% } %>
 
       <% if (term.type === 'maxNumberOfOperation') { %>
-        maxNumberOfOperationIsInitialized<%= index %> := contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start == 0 && contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.End == 0;
+        maxNumberOfOperationIsInitialized<%= index %> := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start == 0 && asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End == 0;
 
-        endPeriodIsLassThanAccessDateTime<%= index %> := contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.End < accessDateTime;
+        endPeriodIsLassThanAccessDateTime<%= index %> := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End < accessDateTime;
 
         if (!maxNumberOfOperationIsInitialized<%= index %> || endPeriodIsLassThanAccessDateTime<%= index %>) {
-          contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start  = accessDateTime;
-          contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.End    = accessDateTime + timeInSeconds[contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.TimeUnit];
-          contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used   = 0;
+          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start  = accessDateTime;
+          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End    = accessDateTime + timeInSeconds[asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.TimeUnit];
+          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used   = 0;
         }
 
-        isValid = isValid && contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used <= contract.<%= clause.name.pascal %>.<%= term.name.pascal %>.Max;
+        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Max;
 
       <% } %>
 
@@ -268,16 +434,13 @@ func (s *SmartContract) Query(ctx contractapi.TransactionContextInterface, contr
 
     <% if (clause.operation === 'request') { %>
       <% timeoutTerms.forEach(timeout => { %>
-        contract.<%= timeout.clauseName.pascal %>.<%= timeout.termName.pascal %>.End  = accessDateTime + contract.<%= timeout.clauseName.pascal %>.<%= timeout.termName.pascal %>.Increase;
+        asset.<%= timeout.clauseName.pascal %>.<%= timeout.termName.pascal %>.End  = accessDateTime + asset.<%= timeout.clauseName.pascal %>.<%= timeout.termName.pascal %>.Increase;
       <% }) %>
     <% } %>
 
-    if !isValid {
-      <% if (clause.errorMessage) { %>
-        return isValid, fmt.Errorf(<%- clause.errorMessage %>)
-      <% } else { %>
-        return isValid, fmt.Errorf("error executing clause: <%- clause.name.pascal %>")
-      <% } %>
+    if !isValid { <% if (clause.errorMessage) { %>
+      return isValid, fmt.Errorf(<%- clause.errorMessage %>) <% } else { %>
+      return isValid, fmt.Errorf("error executing clause: <%- clause.name.pascal %>")<% } %>
     }
 
     return isValid, nil;
@@ -285,16 +448,16 @@ func (s *SmartContract) Query(ctx contractapi.TransactionContextInterface, contr
   <% }) %>
 
 func main() {
-	chainconde, err := contractapi.NewChaincode(new(SmartContract))
+  chainconde, err := contractapi.NewChaincode(new(SmartContract))
 
-	if err != nil {
-		fmt.Errorf("error create chaincode: %s", err.Error())
-		return
-	}
+  if err != nil {
+    log.Panicf("error create chaincode: %s", err.Error())
+    return
+  }
 
-	if err := chainconde.Start(); err != nil {
-		fmt.Errorf("error create chaincode: %s", err.Error())
-	}
+  if err := chainconde.Start(); err != nil {
+    log.Panicf("error create chaincode: %s", err.Error())
+  }
 }
 
 `;
