@@ -38,21 +38,21 @@ type Parties struct {
 }
 
 type Interval struct {
-  Start int \`json:"start"\`
-  End int   \`json:"end"\`
+  Start time.Time   \`json:"start"\`
+  End   time.Time   \`json:"end"\`
 }
 
 type Timeout struct {
-  Increase int \`json:"increase"\`
-  End int \`json:"end"\`
+  Increase  int       \`json:"increase"\`
+  End       time.Time \`json:"end"\`
 }
 
 type MaxNumberOfOperation struct {
-  Max int \`json:"max"\`
-  Used int \`json:"used"\`
-  Start int \`json:"start"\`
-  End int \`json:"end"\`
-  TimeUnit string \`json:"timeUnit"\`
+  Max       int       \`json:"max"\`
+  Used      int       \`json:"used"\`
+  Start     time.Time \`json:"start"\`
+  End       time.Time \`json:"end"\`
+  TimeUnit  string    \`json:"timeUnit"\`
 }
 
 <% clauses.forEach(clause => { %>
@@ -266,8 +266,6 @@ func (s *SmartContract) Init(ctx contractapi.TransactionContextInterface, assetR
     <% clause.terms.forEach(term => { %>
       <% if (term.type === 'maxNumberOfOperation') { %>
         asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used = 0
-        asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start = 0
-        asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End = 0
       <% } %>
     <% }) %>
   <% }) %>
@@ -371,6 +369,8 @@ func (s *SmartContract) QueryClientId(ctx contractapi.TransactionContextInterfac
   func (s *SmartContract) Clause<%= clause.name.pascal %> ( ctx contractapi.TransactionContextInterface, assetId string, <% clause.variables.map((variable, index) =>  { %>
       <% if (variable.type === 'BOOLEAN') {%>
         <%= \`\${variable.name} bool, \` %>
+      <% } else if (['DATE', 'DATETIME', 'TIME'].includes(variable.type)) {%>
+        <%= \`\${variable.name} time.Time, \` %>
       <% } else { %>
         <%= \`\${variable.name} \${['NUMBER', 'DATE', 'DATETIME', 'TIME'].includes(variable.type) ? 'int' : 'string'},\` %>
       <% } %>
@@ -396,37 +396,41 @@ func (s *SmartContract) QueryClientId(ctx contractapi.TransactionContextInterfac
 
     <% clause.terms.forEach((term, index) => { %>
       <% if (term.type === 'weekdayInterval') { %>
-        isValid = isValid && weekDay >= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start && weekDay <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
+        isWeekDayIntervalAfterOrEqualStart := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start.After(weekDay) || asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start.Equal(weekDay)
+        isWeekDayIntervalBeforeOrEqualEnd := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End.Before(weekDay) || asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End.Equal(weekDay)
+        isValid = isValid && isWeekDayIntervalAfterOrEqualStart && isWeekDayIntervalBeforeOrEqualEnd
       <% } %>
 
       <% if (term.type === 'timeInterval') { %>
-        isValid = isValid && accessTime >= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start && accessTime <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
+        isTimeIntervalAfterOrEqualStart := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start.After(accessTime) || asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start.Equal(accessTime)
+        isTimeIntervalBeforeOrEqualEnd := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End.Before(accessTime) || asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End.Equal(accessTime)
+        isValid = isValid && isTimeIntervalAfterOrEqualStart && isTimeIntervalBeforeOrEqualEnd
       <% } %>
 
       <% if (term.type === 'timeout') { %>
-        isValid = isValid && accessDateTime <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End;
+        isValid = isValid && (accessDateTime.Before(asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End) || accessDateTime.Equal(asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End))
       <% } %>
 
       <% if (term.type === 'messageContent' && term.arguments.type === 'TEXT') { %>
-        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %> <%- term.arguments.operator %> <%= term.name.camel %>;
+        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %> <%- term.arguments.operator %> <%= term.name.camel %>
       <% } %>
 
       <% if (term.type === 'messageContent' && term.arguments.type !== 'TEXT') { %>
-        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %> <%- term.arguments.operator %> <%= term.name.camel %>;
+        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %> <%- term.arguments.operator %> <%= term.name.camel %>
       <% } %>
 
       <% if (term.type === 'maxNumberOfOperation') { %>
-        maxNumberOfOperationIsInitialized<%= index %> := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start == 0 && asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End == 0;
+        maxNumberOfOperationIsInitialized<%= index %> := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start.IsZero() && asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End.IsZero()
 
-        endPeriodIsLassThanAccessDateTime<%= index %> := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End < accessDateTime;
+        endPeriodIsLassThanAccessDateTime<%= index %> := asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End.Before(accessDateTime);
 
         if (!maxNumberOfOperationIsInitialized<%= index %> || endPeriodIsLassThanAccessDateTime<%= index %>) {
-          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start  = accessDateTime;
-          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End    = accessDateTime + timeInSeconds[asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.TimeUnit];
-          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used   = 0;
+          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Start  = accessDateTime
+          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.End    = accessDateTime.Add(time.Duration(timeInSeconds[asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.TimeUnit]) * time.Second)
+          asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used   = 0
         }
 
-        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Max;
+        isValid = isValid && asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Used <= asset.<%= clause.name.pascal %>.<%= term.name.pascal %>.Max
 
       <% } %>
 
@@ -434,7 +438,7 @@ func (s *SmartContract) QueryClientId(ctx contractapi.TransactionContextInterfac
 
     <% if (clause.operation === 'request') { %>
       <% timeoutTerms.forEach(timeout => { %>
-        asset.<%= timeout.clauseName.pascal %>.<%= timeout.termName.pascal %>.End  = accessDateTime + asset.<%= timeout.clauseName.pascal %>.<%= timeout.termName.pascal %>.Increase;
+        asset.<%= timeout.clauseName.pascal %>.<%= timeout.termName.pascal %>.End  = accessDateTime.Add(time.Duration(asset.<%= timeout.clauseName.pascal %>.<%= timeout.termName.pascal %>.Increase) * time.Second)
       <% }) %>
     <% } %>
 
